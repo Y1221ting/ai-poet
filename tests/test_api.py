@@ -191,7 +191,8 @@ def index_page() -> None:
 
 
 def assets() -> None:
-    for path, needle in [("/static/style.css", "--maple"), ("/static/app.js", "api/generate")]:
+    # 用主题变量名当特征串：能同时证明「返回的是 CSS 本体」和「主题变量没丢」
+    for path, needle in [("/static/style.css", "--ochre"), ("/static/app.js", "api/generate")]:
         r = client.get(path)
         assert r.status_code == 200, (path, r.status_code)
         assert needle in r.text, path

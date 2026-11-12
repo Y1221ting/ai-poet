@@ -17,10 +17,11 @@ const panelCollapse = document.getElementById("panelCollapse");
 const clearBtn = document.getElementById("clearBtn");
 const toastEl = document.getElementById("toast");
 
+/* 头像与标识：一律细线水墨风格，不用色块或卡通形象 */
 const LEAF_SVG =
-  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.5l1.7 3.1 2.4-1.1-.8 2.7 3.3.5-2.3 2 1.4 2.4-3.1 0-.4 2.5-1.9-1.7v7.3h-.9l0-7.3-1.9 1.7-.4-2.5-3.1 0 1.4-2.4-2.3-2 3.3-.5-.8-2.7 2.4 1.1z"/></svg>';
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linejoin="round" stroke-linecap="round"><path d="M12 2.6l1.5 3.2 2.4-1.4-.6 3 3.4.3-2.1 2.4 1.3 2.6-3.1-.2-.3 2.9-2-1.9v7.6"/><path d="M12 2.6l-1.5 3.2L8.1 4.4l.6 3-3.4.3 2.1 2.4-1.3 2.6 3.1-.2.3 2.9 2-1.9"/></svg>';
 const USER_SVG =
-  '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8.4" r="3.5"/><path d="M4.8 20.2c.7-3.6 3.6-5.7 7.2-5.7s6.5 2.1 7.2 5.7c.1.6-.4 1.1-1 1.1H5.8c-.6 0-1.1-.5-1-1.1z"/></svg>';
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"><circle cx="12" cy="8.6" r="3.6"/><path d="M5.2 20.4c.9-3.5 3.6-5.4 6.8-5.4s5.9 1.9 6.8 5.4"/></svg>';
 
 const state = {
   meta: null,
@@ -30,18 +31,29 @@ const state = {
   greeted: false,
 };
 
+/* 短札用「14.20」，落款用「2026年11月12日 17:20」，两种粒度分开 */
 const nowHM = () =>
-  new Date().toLocaleTimeString("zh-CN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  new Date()
+    .toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false })
+    .replace(":", ".");
+
+const fullDate = () => {
+  const d = new Date();
+  const hm = d
+    .toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${hm}`;
+};
 
 /* ---------------- 渲染 ---------------- */
 
-function addMessage(role, text) {
+/**
+ * role=ai  -> 花笺：题签 + 正文 + 落款
+ * role=me  -> 短札：茶褐实底 + 时间戳
+ * 两者都返回 { row, body, bubble, content, meta }，上层只认这套接口。
+ */
+function addMessage(role, text, opts = {}) {
   const row = document.createElement("div");
-  row.className = `msg ${role}`;
+  row.className = `msg ${role === "ai" ? "ai" : "me"}`;
 
   const avatar = document.createElement("div");
   avatar.className = `avatar ${role === "ai" ? "ai" : "me"}`;
@@ -50,19 +62,47 @@ function addMessage(role, text) {
   const body = document.createElement("div");
   body.className = "msg-body";
 
-  const bubble = document.createElement("div");
-  bubble.className = "bubble";
+  let bubble;
+  let content;
+  let meta;
 
-  const content = document.createElement("span");
-  content.className = "bubble-text";
-  content.textContent = text || "";
-  bubble.append(content);
+  if (role === "ai") {
+    bubble = document.createElement("article");
+    bubble.className = "jian";
 
-  const meta = document.createElement("div");
-  meta.className = "meta";
-  meta.textContent = nowHM();
+    const tag = document.createElement("span");
+    tag.className = "jian-tag";
+    tag.textContent = opts.tag ?? state.style ?? "";
 
-  body.append(bubble, meta);
+    content = document.createElement("p");
+    content.className = "jian-text";
+    content.textContent = text || "";
+
+    const sign = document.createElement("div");
+    sign.className = "jian-sign";
+    const name = document.createElement("span");
+    name.className = "sign-name";
+    name.textContent = "AI 诗人";
+    meta = document.createElement("span");
+    meta.className = "sign-time";
+    meta.textContent = opts.pending ? "运笔中…" : fullDate();
+    sign.append(name, meta);
+
+    bubble.append(tag, content, sign);
+  } else {
+    bubble = document.createElement("div");
+    bubble.className = "zha";
+    bubble.textContent = text || "";
+    content = bubble;
+
+    meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = nowHM();
+  }
+
+  body.append(bubble);
+  if (role !== "ai") body.append(meta);
+
   row.append(avatar, body);
   chatEl.append(row);
   scrollToBottom();
@@ -70,11 +110,11 @@ function addMessage(role, text) {
 }
 
 function setCaret(msg, on) {
-  const existing = msg.bubble.querySelector(".caret");
+  const existing = msg.content.querySelector(".caret");
   if (on && !existing) {
     const caret = document.createElement("span");
     caret.className = "caret";
-    msg.bubble.append(caret);
+    msg.content.append(caret);
   } else if (!on && existing) {
     existing.remove();
   }
@@ -89,26 +129,10 @@ function scrollToBottom() {
 }
 
 function greet() {
-  const msg = addMessage("ai", "");
+  const msg = addMessage("ai", "", { tag: "序", pending: false });
   msg.content.textContent =
-    "我是你的诗人。给我一个主题，我来落笔——风格可以在右上角的「参数设置」里换。";
-
-  if (state.meta && state.meta.examples && state.meta.examples.length) {
-    const chips = document.createElement("div");
-    chips.className = "chips";
-    state.meta.examples.forEach((theme) => {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "chip";
-      chip.textContent = theme;
-      chip.addEventListener("click", () => {
-        inputEl.value = theme;
-        formEl.requestSubmit();
-      });
-      chips.append(chip);
-    });
-    msg.body.insertBefore(chips, msg.meta);
-  }
+    "我是你的诗人。给我一个主题，我来落笔——风格可在右上角「参数设置」中更换。";
+  msg.meta.textContent = "候 题";
   state.greeted = true;
 }
 
@@ -121,9 +145,9 @@ function showError(msg, message, code) {
     const tag = document.createElement("span");
     tag.className = "err-code";
     tag.textContent = `错误码 ${code}`;
-    msg.bubble.append(tag);
+    msg.content.after(tag);
   }
-  msg.meta.textContent = nowHM();
+  msg.meta.textContent = fullDate();
   setCaret(msg, false);
 }
 
@@ -140,10 +164,9 @@ function toast(text) {
 /* ---------------- 发送与流式接收 ---------------- */
 
 async function send(theme) {
-  const msg = addMessage("user", theme);
-  msg.meta.textContent = nowHM();
+  addMessage("user", theme);
 
-  const reply = addMessage("ai", "");
+  const reply = addMessage("ai", "", { pending: true });
   showTyping(reply);
 
   state.streaming = true;
@@ -202,7 +225,7 @@ async function send(theme) {
       showError(reply, "上游没有返回内容，请重试。", "empty");
     } else {
       setCaret(reply, false);
-      reply.meta.textContent = nowHM();
+      reply.meta.textContent = fullDate();
     }
   } catch (err) {
     if (err && err.name === "AbortError") {
@@ -211,7 +234,7 @@ async function send(theme) {
       if (!got) {
         reply.content.textContent = "已停止。";
       } else {
-        reply.meta.textContent = `${nowHM()} · 已停止`;
+        reply.meta.textContent = `${fullDate()} · 已停笔`;
       }
     } else {
       console.error(err);
@@ -253,7 +276,7 @@ function handleFrame(frame, reply) {
   }
   if (event === "done") {
     setCaret(reply, false);
-    reply.meta.textContent = nowHM();
+    reply.meta.textContent = fullDate();
     return "done";
   }
   if (event === "error") {
