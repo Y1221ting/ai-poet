@@ -38,6 +38,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
+        frozen=True,  # 配置只读：避免运行期被意外改写，也让实例可哈希（供 lru_cache 复用客户端）
     )
 
     dashscope_api_key: str = ""
