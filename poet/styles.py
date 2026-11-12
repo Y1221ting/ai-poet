@@ -32,6 +32,7 @@ class Style:
     system: str
     instruction: str
     expected_chars: int | None = None
+    hint: str = ""  # 界面上给用户看的一句话说明，例如「4 句 × 每句 5 字」
 
     def render(self, theme: str) -> str:
         return self.instruction.format(theme=theme)
@@ -58,6 +59,7 @@ def _classical(label: str) -> Style:
             f"只输出诗本身：每句一行，不加标题、不加序号、不加解释、不要用代码块包裹。"
         ),
         expected_chars=lines * per_line,
+        hint=f"{lines} 句 × 每句 {per_line} 字",
     )
 
 
@@ -94,6 +96,7 @@ STYLES: dict[str, Style] = {
             label="现代诗",
             system="你是一位当代汉语诗人，语言克制、意象具体，拒绝陈词滥调。",
             instruction=_MODERN_INSTRUCTION,
+            hint="自由分行 · 意象具体",
         ),
     )
 }

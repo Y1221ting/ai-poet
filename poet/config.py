@@ -58,6 +58,7 @@ class Settings(BaseSettings):
 
     server_name: str = "127.0.0.1"
     server_port: int = Field(default=7860, ge=1024, le=65535)
+    open_browser: bool = True
 
     @property
     def is_agent(self) -> bool:

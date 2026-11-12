@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#F7EFE2" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23D9773F' d='M12 1.5l1.7 3.1 2.4-1.1-.8 2.7 3.3.5-2.3 2 1.4 2.4-3.1 0-.4 2.5-1.9-1.7v7.3h-.9l0-7.3-1.9 1.7-.4-2.5-3.1 0 1.4-2.4-2.3-2 3.3-.5-.8-2.7 2.4 1.1z'/%3E%3C/svg%3E" />
+<title>AI 诗人 / 歌词生成器</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <!-- 背景层：暖光渐变 + 纸张纹理 + 少量枫叶，全部不参与交互 -->
+  <div class="wash" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="leaves" aria-hidden="true">
+    <span class="leaf leaf-a">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.5l1.7 3.1 2.4-1.1-.8 2.7 3.3.5-2.3 2 1.4 2.4-3.1 0-.4 2.5-1.9-1.7v7.3h-.9l0-7.3-1.9 1.7-.4-2.5-3.1 0 1.4-2.4-2.3-2 3.3-.5-.8-2.7 2.4 1.1z"/></svg>
+    </span>
+    <span class="leaf leaf-b">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.5l1.7 3.1 2.4-1.1-.8 2.7 3.3.5-2.3 2 1.4 2.4-3.1 0-.4 2.5-1.9-1.7v7.3h-.9l0-7.3-1.9 1.7-.4-2.5-3.1 0 1.4-2.4-2.3-2 3.3-.5-.8-2.7 2.4 1.1z"/></svg>
+    </span>
+    <span class="leaf leaf-c">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.5l1.7 3.1 2.4-1.1-.8 2.7 3.3.5-2.3 2 1.4 2.4-3.1 0-.4 2.5-1.9-1.7v7.3h-.9l0-7.3-1.9 1.7-.4-2.5-3.1 0 1.4-2.4-2.3-2 3.3-.5-.8-2.7 2.4 1.1z"/></svg>
+    </span>
+    <span class="leaf leaf-d">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.5l1.7 3.1 2.4-1.1-.8 2.7 3.3.5-2.3 2 1.4 2.4-3.1 0-.4 2.5-1.9-1.7v7.3h-.9l0-7.3-1.9 1.7-.4-2.5-3.1 0 1.4-2.4-2.3-2 3.3-.5-.8-2.7 2.4 1.1z"/></svg>
+    </span>
+    <span class="leaf leaf-e">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.5l1.7 3.1 2.4-1.1-.8 2.7 3.3.5-2.3 2 1.4 2.4-3.1 0-.4 2.5-1.9-1.7v7.3h-.9l0-7.3-1.9 1.7-.4-2.5-3.1 0 1.4-2.4-2.3-2 3.3-.5-.8-2.7 2.4 1.1z"/></svg>
+    </span>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.5l1.7 3.1 2.4-1.1-.8 2.7 3.3.5-2.3 2 1.4 2.4-3.1 0-.4 2.5-1.9-1.7v7.3h-.9l0-7.3-1.9 1.7-.4-2.5-3.1 0 1.4-2.4-2.3-2 3.3-.5-.8-2.7 2.4 1.1z"/></svg>
+      </span>
+      <h1 class="brand-title">AI 诗人 <span class="brand-slash">/</span> 歌词生成器</h1>
+      <p class="brand-sub">输入一个主题与风格，让大模型为你创作一首诗或一段歌词</p>
+    </div>
+
+    <div class="param-wrap">
+      <button id="paramBtn" class="param-btn" type="button" aria-expanded="false" aria-controls="paramPanel">
+        <span>参数设置</span>
+        <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+      <div id="paramPanel" class="param-panel" hidden>
+        <div class="panel-head">
+          <span>参数设置</span>
+          <button id="panelCollapse" class="panel-collapse" type="button" aria-label="收起参数面板">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="styleSelect">风格</label>
+          <div class="select-wrap">
+            <select id="styleSelect" class="field-select"></select>
+            <svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <p id="styleHint" class="field-hint"></p>
+        </div>
+
+        <div class="field field-inline">
+          <span class="field-label">当前通道</span>
+          <span id="modeValue" class="field-value">—</span>
+        </div>
+
+        <div class="field field-inline">
+          <span class="field-label">主题字数上限</span>
+          <span id="maxChars" class="field-value">—</span>
+        </div>
+
+        <button id="clearBtn" class="ghost-btn" type="button">清空对话</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="chat" class="chat" aria-live="polite" aria-label="对话记录"></main>
+
+  <form id="composer" class="composer" autocomplete="off">
+    <button id="attachBtn" class="icon-btn" type="button" title="附件功能暂未开放" aria-label="附件（暂未开放）">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 7.5l-6.6 6.6a3 3 0 104.2 4.2l7-7a5 5 0 10-7.1-7.1l-7.4 7.4a7 7 0 009.9 9.9l4.2-4.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <input id="themeInput" class="composer-input" type="text" placeholder="输入你的主题…" maxlength="50" aria-label="主题" />
+
+    <button id="emojiBtn" class="icon-btn" type="button" title="表情功能暂未开放" aria-label="表情（暂未开放）">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="9.2" cy="10.2" r="1.05" fill="currentColor"/><circle cx="14.8" cy="10.2" r="1.05" fill="currentColor"/><path d="M8.6 14.1c.9 1.3 2 1.95 3.4 1.95s2.5-.65 3.4-1.95" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+
+    <button id="sendBtn" class="send-btn" type="submit" aria-label="发送">
+      <svg class="icon-send" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 11.4l15-6.4-5.6 15-3.1-6.1-6.3-2.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M10.8 14.9l8.7-9.9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      <svg class="icon-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="7.5" y="7.5" width="9" height="9" rx="2" fill="currentColor"/></svg>
+    </button>
+  </form>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

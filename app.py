@@ -1,25 +1,24 @@
-"""入口：加载配置 → 构建界面 → 启动服务。
+"""入口：加载配置 → 组装 FastAPI 应用 → 启动 uvicorn。
 
-原来的 app.py 把配置、prompt 拼接、LLM 调用、CSS、界面全部塞在一个文件里。
-现在拆成 poet/ 下的五个模块，这个文件只负责组装与启动，方便一眼看出进程
-是怎么起来的、失败时卡在哪一步。
+界面已从 Gradio 换成「FastAPI + 原生前端」（web/ 目录）：
+设计稿要的对话气泡、时间戳、底部悬浮输入栏、右上角折叠参数面板，
+Gradio 的组件结构表达不了，只能覆盖内部类名硬掰，升级即碎。
+
+这个文件只负责组装与启动，失败时能一眼看出卡在哪一步。
 """
 
 from __future__ import annotations
 
 import logging
-import os
 import sys
+import threading
+import webbrowser
 
-# 必须写在 import gradio 之前：关掉 Gradio 的启动遥测，否则每次启动都会
-# 向 huggingface / api.gradio.app 打几个请求，日志里一片噪音。
-os.environ.setdefault("GRADIO_ANALYTICS_ENABLED", "False")
+import uvicorn
+from pydantic import ValidationError
 
-import gradio as gr  # noqa: E402
-from pydantic import ValidationError  # noqa: E402
-
-from poet.config import load_settings  # noqa: E402
-from poet.ui import APP_CSS, build_ui  # noqa: E402
+from poet.api import create_app
+from poet.config import load_settings
 
 LOG_FORMAT = "%(asctime)s %(levelname)-7s %(name)s | %(message)s"
 
@@ -31,9 +30,9 @@ def setup_logging() -> None:
         datefmt="%H:%M:%S",
         stream=sys.stdout,
     )
-    # 这几家的 HTTP 层日志太吵，只留警告。注意 openai 3.x 用的是 httpx2，
+    # 这几家的 HTTP 层日志太吵，只留警告。openai 3.x 用的是 httpx2，
     # 只关 httpx 是关不掉的。
-    for noisy in ("httpx", "httpx2", "openai", "gradio", "urllib3"):
+    for noisy in ("httpx", "httpx2", "openai", "urllib3", "uvicorn.access"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
@@ -65,20 +64,28 @@ def main() -> int:
         print(format_config_error(exc), file=sys.stderr)
         return 1
 
-    log.info("通道=%s 模型/应用=%s", settings.llm_mode, settings.effective_mode_label)
-    log.info("超时=%ss 重试=%s 并发=%s", settings.timeout_s, settings.max_retries, settings.concurrency_limit)
+    url = f"http://{settings.server_name}:{settings.server_port}"
+    log.info("通道=%s 目标=%s", settings.llm_mode, settings.effective_mode_label)
+    log.info(
+        "超时=%ss 连接超时=%ss 重试=%s",
+        settings.timeout_s,
+        settings.connect_timeout_s,
+        settings.max_retries,
+    )
+    log.info("地址=%s", url)
 
-    demo = build_ui(settings)
-    # 默认每个事件并发 1，全站串行；这里按配置放开
-    demo.queue(default_concurrency_limit=settings.concurrency_limit)
-    # css / theme 在 Gradio 6 必须从 Blocks() 移到 launch()
-    demo.launch(
-        css=APP_CSS,
-        theme=gr.themes.Soft(),
-        server_name=settings.server_name,
-        server_port=settings.server_port,
-        inbrowser=True,
-        show_error=True,
+    app = create_app(settings)
+
+    if settings.open_browser:
+        # 等 uvicorn 起来再开，避免浏览器先到一步拿到「无法访问」
+        threading.Timer(1.2, lambda: webbrowser.open(url)).start()
+
+    uvicorn.run(
+        app,
+        host=settings.server_name,
+        port=settings.server_port,
+        log_config=None,  # 用上面配好的 logging，别再另起一套
+        access_log=False,
     )
     return 0
 
