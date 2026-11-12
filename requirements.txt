@@ -1,2 +1,6 @@
-gradio>=6.0
-openai>=1.0
+# 全部锁死小版本：上一版只写 >=，实测装出跨两个大版本的 openai，不可复现。
+gradio==6.31.0
+openai==3.49.0
+httpx==0.28.1
+pydantic-settings==2.16.2
+tenacity==9.2.1
