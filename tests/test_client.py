@@ -108,13 +108,31 @@ def _model_ok():
     assert out == "床前明月光\n疑是地上霜", out
     assert seen["path"] == "/compatible-mode/v1/chat/completions", seen["path"]
     body = seen["body"]
-    assert body["model"] == "qwen-plus", body.get("model")
+    assert body["model"] == "qwen3.7-plus", body.get("model")
     assert body["temperature"] == 0.9, body.get("temperature")
+    # 写诗是短输出任务，思考模式必须默认关闭，否则首字要等半分钟
+    assert body.get("enable_thinking") is False, body.get("enable_thinking")
     assert body["messages"][0]["role"] == "system"
     assert "秋天" in body["messages"][1]["content"]
 
 
 check("model 通道：URL、model、temperature、messages 全部正确", _model_ok)
+
+
+def _model_thinking_on():
+    """反证：开关设为 True 时上游能收到 True，证明不是硬编码写死 False。"""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json=CHAT_RESP)
+
+    client = make_client(handler, llm_mode=LLMMode.MODEL, enable_thinking=True)
+    client.generate("五言绝句", "秋天")
+    assert seen["body"].get("enable_thinking") is True, seen["body"].get("enable_thinking")
+
+
+check("enable_thinking=True 透传到上游", _model_thinking_on)
 
 print("== 2. agent 通道协议 ==")
 

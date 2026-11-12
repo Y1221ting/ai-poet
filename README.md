@@ -12,10 +12,19 @@
 
 | 通道 | `LLM_MODE` | 说明 |
 |---|---|---|
-| 模型 | `model` | 直接调 `qwen-plus` 等模型，只需 API Key |
+| 模型 | `model` | 直接调 `qwen3.7-plus` 等模型，只需 API Key |
 | 智能体 | `agent` | 调百炼控制台里的**智能体应用**，需 API Key + **App ID** |
 
 > 两者不是同一个东西：模型是「你给 prompt，模型给结果」；智能体是云端配好 prompt、知识库、插件的一整个应用，代码只能传输入。协议也不同——智能体走 Responses API，不是 `chat/completions`，URL 要带 App ID，且**不能传 model**。
+
+**上游入口有两套，Key 不通用，`API_HOST` 必须对得上：**
+
+| 平台 | `API_HOST` | 说明 |
+|---|---|---|
+| 千问AI平台（千问云） | `https://maas.qianwenaiapi.com` | 默认。注册即送每模型 100 万 Token，90 天有效 |
+| 阿里云百炼 | `https://dashscope.aliyuncs.com` | 需实名认证，同样每模型 100 万 Token |
+
+> 路径后缀 `/compatible-mode/v1` 两个平台一致，换平台只改 `API_HOST`。**但模型名不通用**：`qwen-plus` / `qwen-turbo` 这些老名字在千问云上无效，会返回 404。
 
 ---
 
@@ -156,7 +165,7 @@ python tests/test_service.py   # 17 项：输入校验、注入防护、流式�
 python tests/test_api.py       # 10 项：SSE 帧格式、400 拦截、静态资源
 ```
 
-共 **62 项**，用 `httpx.MockTransport` 与 `service.stream` 替身拦截，**不联网、不花额度、不需要真实 Key**。
+共 **63 项**，用 `httpx.MockTransport` 与 `service.stream` 替身拦截，**不联网、不花额度、不需要真实 Key**。
 
 > 已知缺口：并发闸门（`CONCURRENCY_LIMIT`）没有自动化测试，需要并发发起两个请求才能观察，单进程测试里不稳定。
 
@@ -168,9 +177,11 @@ python tests/test_api.py       # 10 项：SSE 帧格式、400 拦截、静态资
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
+| `API_HOST` | `https://maas.qianwenaiapi.com` | 上游入口，Key 必须与之匹配 |
 | `LLM_MODE` | `model` | `model` / `agent` |
-| `MODEL_NAME` | `qwen-plus` | 仅 model 通道生效 |
+| `MODEL_NAME` | `qwen3.7-plus` | 仅 model 通道生效。千问云可用：`qwen3.8-max` / `qwen3.7-plus` / `qwen3.7-flash` |
 | `TEMPERATURE` | `0.9` | 仅 model 通道生效 |
+| `ENABLE_THINKING` | `0` | 思考模式。开启后首字要等 20 秒以上、token 多烧 40 倍，写诗无收益，默认关 |
 | `TIMEOUT_S` | `60` | 单次调用硬超时。SDK 默认是 **600 秒**，必须覆盖 |
 | `CONNECT_TIMEOUT_S` | `5` | 连接超时 |
 | `MAX_RETRIES` | `2` | 传输层重试次数（SDK 内置，识别 429/5xx，401 不重试） |
@@ -193,6 +204,15 @@ python tests/test_api.py       # 10 项：SSE 帧格式、400 拦截、静态资
 
 **Q：报「APP_ID 无效、应用未发布或无访问权限」**
 只会在 `agent` 通道出现。三种可能：App ID 抄错、应用没发布、应用在其他业务空间（需要工作空间 ID）。
+
+**Q：报 404 / `Model not found`，但 Key 明明是好的**
+`API_HOST` 和 `MODEL_NAME` 不配套。典型情况：Key 在千问AI平台（`https://maas.qianwenaiapi.com`）建的，却按阿里云百炼的模型名填了 `qwen-plus`——千问云上没有这个模型。去平台的「免费额度」页看实际可用模型名，照抄一个填进 `MODEL_NAME`。
+
+**Q：`401` 而不是 403/400**
+Key 与 `API_HOST` 不属于同一个平台。两个平台的 Key 前缀相似但互不通用，换平台必须同时换 Key 和 `API_HOST`。
+
+**Q：模型思考很久才开始输出**
+`ENABLE_THINKING=0`。实测 qwen3.7-plus 写一首五绝：开思考 28.3 秒 / 1203 token，关思考 2.3 秒 / 30 token，成诗质量没有差别。
 
 **Q：生成到一半点「停止」，还会扣 token 吗？**
 不会。前端 abort 会断开连接，服务端检测到断开后给后台线程打停止标记，worker 退出循环时 SDK 连接随之关闭。

@@ -63,7 +63,7 @@ print("== 2. model 通道 ==")
 
 def _model_url():
     s = fresh(dashscope_api_key="sk-test", llm_mode=LLMMode.MODEL)
-    assert s.base_url == "https://dashscope.aliyuncs.com/compatible-mode/v1", s.base_url
+    assert s.base_url == "https://maas.qianwenaiapi.com/compatible-mode/v1", s.base_url
     assert s.is_agent is False
 
 
@@ -73,7 +73,7 @@ check("model 通道 base_url 正确", _model_url)
 def _model_no_appid_ok():
     s = fresh(dashscope_api_key="sk-test", llm_mode=LLMMode.MODEL, app_id="")
     assert s.is_agent is False
-    assert "qwen-plus" in s.effective_mode_label
+    assert "qwen3.7-plus" in s.effective_mode_label
 
 
 check("model 通道不要求 APP_ID", _model_no_appid_ok)
@@ -95,7 +95,7 @@ check("agent 通道缺 APP_ID 抛错", _agent_missing_appid)
 
 def _agent_url():
     s = fresh(dashscope_api_key="sk-test", llm_mode=LLMMode.AGENT, app_id="abc123def456")
-    expect = "https://dashscope.aliyuncs.com/api/v2/apps/agent/abc123def456/compatible-mode/v1/"
+    expect = "https://maas.qianwenaiapi.com/api/v2/apps/agent/abc123def456/compatible-mode/v1/"
     assert s.base_url == expect, s.base_url
     assert s.is_agent is True
 

@@ -6,9 +6,14 @@
 3. 支持 .env 文件 + 真实环境变量覆盖，本地开发和部署走同一套代码。
 
 双通道设计（LLM_MODE）：
-    model —— 直接调模型（qwen-plus 等），走 OpenAI 兼容 chat/completions
-    agent —— 调百炼智能体应用，走 OpenAI 兼容 Responses API（需 APP_ID）
+    model —— 直接调模型（qwen3.7-plus 等），走 OpenAI 兼容 chat/completions
+    agent —— 调智能体应用，走 OpenAI 兼容 Responses API（需 APP_ID）
 保留 model 通道是为了在 APP_ID 缺失时仍能降级运行，也方便两条链路对比。
+
+上游有两个入口，Key 不通用，API_HOST 必须对得上：
+    千问AI平台（千问云）  https://maas.qianwenaiapi.com   ← 当前使用
+    阿里云百炼            https://dashscope.aliyuncs.com
+两者的路径后缀都是 /compatible-mode/v1，换入口只需改 API_HOST。
 """
 
 from __future__ import annotations
@@ -20,7 +25,7 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_API_HOST = "https://dashscope.aliyuncs.com"
+DEFAULT_API_HOST = "https://maas.qianwenaiapi.com"
 
 
 class LLMMode(StrEnum):
@@ -46,8 +51,13 @@ class Settings(BaseSettings):
     llm_mode: LLMMode = LLMMode.MODEL
 
     api_host: str = DEFAULT_API_HOST
-    model_name: str = "qwen-plus"
+    model_name: str = "qwen3.7-plus"
     temperature: float = Field(default=0.9, ge=0.0, le=2.0)
+
+    # Qwen3 系列默认可能开思考模式。写诗是短输出任务，开思考纯亏：
+    # 实测 qwen3.7-plus 同一首五绝，开思考 28.3s / 1203 token，关思考 2.3s / 30 token，
+    # 质量没差别。流式场景下首字还会卡半分钟，所以默认关掉，需要推理再打开。
+    enable_thinking: bool = False
 
     timeout_s: float = Field(default=60.0, gt=0)
     connect_timeout_s: float = Field(default=5.0, gt=0)

@@ -185,13 +185,24 @@ class PoetClient:
 
     def _call_model(self, messages: list[dict[str, str]]) -> str:
         resp = self._client.chat.completions.create(
-            model=self.settings.model_name,
             messages=messages,  # type: ignore[arg-type]
-            temperature=self.settings.temperature,
+            **self._model_kwargs(),
         )
         if not resp.choices:
             raise EmptyResponseError("choices 为空")
         return resp.choices[0].message.content or ""
+
+    def _model_kwargs(self) -> dict[str, object]:
+        """model 通道的公共参数。
+
+        enable_thinking 不是 OpenAI 标准字段，只能通过 extra_body 透传；
+        直接写进 create() 会被 SDK 当成未知参数丢掉。
+        """
+        return {
+            "model": self.settings.model_name,
+            "temperature": self.settings.temperature,
+            "extra_body": {"enable_thinking": self.settings.enable_thinking},
+        }
 
     def _call_agent(self, messages: list[dict[str, str]]) -> str:
         # 智能体通道不传 model：模型、prompt、知识库、插件都由云端应用决定
@@ -227,10 +238,9 @@ class PoetClient:
 
     def _stream_model(self, messages: list[dict[str, str]]) -> Iterator[str]:
         stream = self._client.chat.completions.create(
-            model=self.settings.model_name,
             messages=messages,  # type: ignore[arg-type]
-            temperature=self.settings.temperature,
             stream=True,
+            **self._model_kwargs(),
         )
         for chunk in stream:
             if not chunk.choices:
