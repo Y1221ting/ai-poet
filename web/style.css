@@ -532,6 +532,11 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+/* AI 常输出短句或四行诗，不给最小宽度会被内容压成一条窄竖条 */
+.msg.ai .bubble {
+  min-width: 216px;
+}
+
 .msg.user .bubble {
   color: #fffaf3;
   background: linear-gradient(150deg, #cd8b5c 0%, #bd7443 100%);

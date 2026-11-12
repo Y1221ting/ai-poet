@@ -6,6 +6,10 @@
 
 ![界面预览](docs/preview.png)
 
+生成效果（五言绝句，流式逐字落笔）：
+
+![生成效果](docs/preview-chat.png)
+
 支持两种调用通道，改一行配置即可切换：
 
 | 通道 | `LLM_MODE` | 说明 |

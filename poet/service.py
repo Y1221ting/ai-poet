@@ -75,6 +75,9 @@ def validate_theme(theme: str, settings: Settings) -> str:
 
 
 def validate_style(style_label: str) -> str:
+    # 风格下拉未初始化时前端会传空串，直接拼进提示语会变成「未知风格：。」这种病句
+    if not (style_label or "").strip():
+        raise InputError(f"还没选择风格。可选：{'、'.join(STYLE_LABELS)}")
     if style_label not in STYLE_LABELS:
         raise InputError(f"未知风格：{style_label}。可选：{'、'.join(STYLE_LABELS)}")
     return style_label
