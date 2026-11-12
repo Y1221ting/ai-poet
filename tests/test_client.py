@@ -14,9 +14,11 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from poet.client import (  # noqa: E402
+    AccountError,
     AuthError,
     AppIdError,
     EmptyResponseError,
+    RequestRejected,
     PoetClient,
     RateLimitError,
     UpstreamTimeout,
@@ -314,6 +316,57 @@ def _auth_no_retry():
 
 
 check("401 不重试（重试一万次也没用）", _auth_no_retry)
+
+print("== 7. 400 不能一律当 APP_ID 错误 ==")
+
+
+def _account_400():
+    # 阿里云欠费 / 额度耗尽时返回的就是 400 Access denied + overdue-payment
+    body = err_body(
+        "Access denied, please make sure your account is in good standing. "
+        "For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment"
+    )
+    client = make_client(lambda req: httpx.Response(400, json=body))
+    try:
+        client.generate("五言绝句", "秋天")
+    except AccountError as e:
+        assert e.code == "account"
+        assert "账户" in e.user_message
+        return
+    raise AssertionError("欠费 400 没翻译成 AccountError")
+
+
+check("400 + overdue-payment -> AccountError（不是 APP_ID 错误）", _account_400)
+
+
+def _rejected_400():
+    client = make_client(lambda req: httpx.Response(400, json=err_body("temperature out of range")))
+    try:
+        client.generate("五言绝句", "秋天")
+    except RequestRejected as e:
+        assert e.code == "rejected"
+        assert "APP_ID" not in e.user_message
+        return
+    raise AssertionError("模型通道的参数型 400 没翻译成 RequestRejected")
+
+
+check("400(模型通道) -> RequestRejected", _rejected_400)
+
+
+def _agent_400():
+    client = make_client(
+        lambda req: httpx.Response(400, json=err_body("Invalid app id")),
+        llm_mode=LLMMode.AGENT,
+        app_id="app-x",
+    )
+    try:
+        client.generate("五言绝句", "秋天")
+    except AppIdError:
+        return
+    raise AssertionError("智能体通道的 400 仍应翻译成 AppIdError")
+
+
+check("400(智能体通道) -> AppIdError", _agent_400)
 
 print(f"\n结果：{PASS} 通过 / {FAIL} 失败")
 sys.exit(1 if FAIL else 0)

@@ -77,12 +77,35 @@ class UpstreamUnavailable(PoetError):
     user_message = "上游服务暂时不可用，请稍后重试。"
 
 
+class AccountError(PoetError):
+    """账户层面的拒绝：欠费、免费额度用尽、未实名、模型未开通。
+
+    这类 400 和「参数写错」完全是两件事，原来一律翻译成 AppIdError，
+    用模型通道的人会看到「APP_ID 无效」——排查方向全错。
+    """
+
+    code = "account"
+    user_message = "上游拒绝了请求：账户可能欠费或额度用尽，请到百炼控制台检查账户状态。"
+
+
+class RequestRejected(PoetError):
+    """其他 400：参数不被支持、内容被安全策略拦截等。"""
+
+    code = "rejected"
+    user_message = "上游拒绝了这次请求（参数不被支持或内容未通过审核），请换一个主题再试。"
+
+
 class EmptyResponseError(PoetError):
     code = "empty"
     user_message = "上游返回了空内容，已自动重试仍失败。"
 
 
-def _translate(exc: openai.OpenAIError) -> PoetError:
+# 上游 400 里表示「账户不能用」的关键词。阿里云在欠费 / 额度耗尽时返回
+# 400 Access denied + overdue-payment，容易和参数错误混在一起。
+_ACCOUNT_HINTS = ("overdue", "access denied", "arrear", "insufficient", "quota")
+
+
+def _translate(exc: openai.OpenAIError, is_agent: bool = False) -> PoetError:
     """把 SDK 异常翻译成业务异常。顺序重要：子类必须在父类之前判断。"""
     if isinstance(exc, openai.AuthenticationError):
         return AuthError(str(exc))
@@ -93,10 +116,14 @@ def _translate(exc: openai.OpenAIError) -> PoetError:
     if isinstance(exc, openai.APIConnectionError):
         return UpstreamUnavailable(f"网络不可达: {exc}")
     if isinstance(exc, openai.NotFoundError):
-        # 智能体通道 404 基本都是 APP_ID 写错或应用没发布
-        return AppIdError(str(exc))
+        # 智能体通道 404 基本都是 APP_ID 写错或应用没发布；模型通道 404 是模型名不对
+        return AppIdError(str(exc)) if is_agent else RequestRejected(str(exc))
     if isinstance(exc, openai.BadRequestError):
-        return AppIdError(str(exc))
+        text = str(exc)
+        if any(h in text.lower() for h in _ACCOUNT_HINTS):
+            return AccountError(text)
+        # 智能体 400 常见于 app_id / 应用未发布；模型 400 多为参数或内容审核
+        return AppIdError(text) if is_agent else RequestRejected(text)
     if isinstance(exc, openai.APIStatusError):
         if exc.status_code >= 500:
             return UpstreamUnavailable(f"HTTP {exc.status_code}")
@@ -180,7 +207,7 @@ class PoetClient:
             raise
         except openai.OpenAIError as exc:
             log.warning("上游调用失败：%s", exc)
-            raise _translate(exc) from exc
+            raise _translate(exc, self.is_agent) from exc
 
     # ---------- 流式 ----------
 
@@ -196,7 +223,7 @@ class PoetClient:
             raise
         except openai.OpenAIError as exc:
             log.warning("上游流式调用失败：%s", exc)
-            raise _translate(exc) from exc
+            raise _translate(exc, self.is_agent) from exc
 
     def _stream_model(self, messages: list[dict[str, str]]) -> Iterator[str]:
         stream = self._client.chat.completions.create(
