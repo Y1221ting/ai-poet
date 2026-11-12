@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -12,6 +13,7 @@ from poet.service import (  # noqa: E402
     InputError,
     describe_styles,
     normalize_output,
+    stream,
     validate_style,
     validate_theme,
 )
@@ -171,7 +173,63 @@ def _norm_keep_indent():
 
 check("保留行首缩进（只去行尾）", _norm_keep_indent)
 
-print("== 6. 风格说明 ==")
+print("== 6. 流式累积（用假客户端，不联网）==")
+
+
+class _FakeClient:
+    """替身：模拟 client 的流式与非流式接口。"""
+
+    def __init__(self, chunks: list[str]) -> None:
+        self.chunks = chunks
+        self.calls: list[tuple[str, str]] = []
+
+    def stream(self, style_label: str, theme: str):
+        self.calls.append((style_label, theme))
+        yield from self.chunks
+
+    def generate(self, style_label: str, theme: str) -> str:
+        self.calls.append((style_label, theme))
+        return "".join(self.chunks)
+
+
+def _stream_accumulates():
+    fake = _FakeClient(["床前", "明月光", "，"])
+    with patch("poet.service.get_client", return_value=fake):
+        snapshots = list(stream(S, "五言绝句", "秋天"))
+    assert snapshots == ["床前", "床前明月光", "床前明月光，"], snapshots
+    assert fake.calls == [("五言绝句", "秋天")], f"上游被调用 {fake.calls}"
+
+
+check("stream 产出的是累积快照（Gradio 需要整段而非增量）", _stream_accumulates)
+
+
+def _stream_empty():
+    fake = _FakeClient(["", "  "])
+    with patch("poet.service.get_client", return_value=fake):
+        try:
+            list(stream(S, "现代诗", "故乡"))
+        except InputError:
+            return
+    raise AssertionError("上游返回空内容时没抛错")
+
+
+check("流式结果全空时抛 InputError", _stream_empty)
+
+
+def _stream_validates_first():
+    fake = _FakeClient(["不该被调用"])
+    with patch("poet.service.get_client", return_value=fake):
+        try:
+            list(stream(S, "五言绝句", ""))
+        except InputError:
+            assert fake.calls == [], "校验失败时不该调用上游（浪费额度）"
+            return
+    raise AssertionError("空主题在流式路径下没被拦截")
+
+
+check("流式路径同样先校验，校验失败不触发上游调用", _stream_validates_first)
+
+print("== 7. 风格说明 ==")
 
 
 def _desc():

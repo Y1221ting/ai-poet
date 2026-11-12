@@ -42,6 +42,15 @@ class PoetError(Exception):
         self.detail = detail
         super().__init__(f"{self.user_message}（{detail}）" if detail else self.user_message)
 
+    @property
+    def for_user(self) -> str:
+        """给界面展示的文案。默认用类级别的友好提示。
+
+        detail 里通常夹着上游原始报错（含错误码、英文堆栈），不适合直接给用户看；
+        但输入校验类错误的 detail 本身就是给人看的具体原因，由子类覆写。
+        """
+        return self.user_message
+
 
 class AuthError(PoetError):
     code = "auth"

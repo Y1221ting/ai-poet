@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 
-from poet.client import PoetError
+from poet.client import PoetError, get_client
 from poet.config import Settings
 from poet.styles import STYLE_LABELS, build_messages, get_style
 
@@ -36,6 +36,11 @@ class InputError(PoetError):
 
     code = "invalid_input"
     user_message = "输入不合法。"
+
+    @property
+    def for_user(self) -> str:
+        # 这里的 detail 就是给用户看的具体原因（"主题不能为空"等），要直出
+        return self.detail or self.user_message
 
 
 def _clean(theme: str) -> str:
@@ -104,8 +109,6 @@ def prepare(settings: Settings, style_label: str, theme: str) -> tuple[str, str]
 
 def generate(settings: Settings, style_label: str, theme: str) -> str:
     """一次性返回完整结果。"""
-    from poet.client import get_client
-
     style_label, theme = prepare(settings, style_label, theme)
     raw = get_client(settings).generate(style_label, theme)
     return normalize_output(raw)
@@ -117,7 +120,8 @@ def stream(settings: Settings, style_label: str, theme: str) -> Iterator[str]:
     buffer = ""
     for delta in get_client(settings).stream(style_label, theme):
         buffer += delta
-        yield buffer
+        # 每个快照都归一化：模型常吐出 markdown 硬换行留下的行尾空格
+        yield normalize_output(buffer)
     if not buffer.strip():
         raise InputError("上游没有返回任何内容，请重试。")
 
